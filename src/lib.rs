@@ -1,6 +1,7 @@
 extern crate duckdb;
 extern crate duckdb_loadable_macros;
 extern crate libduckdb_sys;
+extern crate libc;
 
 use duckdb::{
     core::{DataChunkHandle, Inserter, LogicalTypeHandle, LogicalTypeId},
@@ -8,74 +9,67 @@ use duckdb::{
     Connection, Result,
 };
 use duckdb_loadable_macros::duckdb_entrypoint_c_api;
-use libduckdb_sys as ffi;
+use libc::{c_char, c_void};
 use std::{
     error::Error,
-    ffi::{c_char, CString},
+    ffi::{CStr, CString},
 };
 
 #[repr(C)]
-struct HelloBindData {
-    name: *mut c_char,
+struct SASBindData {
+    file_path: *mut c_char,
 }
 
-impl Free for HelloBindData {
+impl Free for SASBindData {
     fn free(&mut self) {
         unsafe {
-            if self.name.is_null() {
-                return;
+            if !self.file_path.is_null() {
+                drop(CString::from_raw(self.file_path));
             }
-            drop(CString::from_raw(self.name));
         }
     }
 }
 
 #[repr(C)]
-struct HelloInitData {
+struct SASInitData {
     done: bool,
 }
 
-struct HelloVTab;
+struct SASVTab;
 
-impl Free for HelloInitData {}
+impl Free for SASInitData {}
 
-impl VTab for HelloVTab {
-    type InitData = HelloInitData;
-    type BindData = HelloBindData;
+impl VTab for SASVTab {
+    type InitData = SASInitData;
+    type BindData = SASBindData;
 
-    unsafe fn bind(bind: &BindInfo, data: *mut HelloBindData) -> Result<(), Box<dyn std::error::Error>> {
-        bind.add_result_column("value", LogicalTypeHandle::from(LogicalTypeId::Varchar));
+    unsafe fn bind(bind: &BindInfo, data: *mut SASBindData) -> Result<(), Box<dyn Error>> {
+        bind.add_result_column("data", LogicalTypeHandle::from(LogicalTypeId::Varchar));
         let param = bind.get_parameter(0).to_string();
-        unsafe {
-            (*data).name = CString::new(param).unwrap().into_raw();
-        }
+        (*data).file_path = CString::new(param)?.into_raw();
         Ok(())
     }
 
-    unsafe fn init(_: &InitInfo, data: *mut HelloInitData) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe {
-            (*data).done = false;
-        }
+    unsafe fn init(_: &InitInfo, data: *mut SASInitData) -> Result<(), Box<dyn Error>> {
+        (*data).done = false;
         Ok(())
     }
 
-    unsafe fn func(func: &FunctionInfo, output: &mut DataChunkHandle) -> Result<(), Box<dyn std::error::Error>> {
-        let init_info = func.get_init_data::<HelloInitData>();
-        let bind_info = func.get_bind_data::<HelloBindData>();
+    unsafe fn func(func: &FunctionInfo, output: &mut DataChunkHandle) -> Result<(), Box<dyn Error>> {
+        let init_data = func.get_init_data::<SASInitData>();
+        let bind_data = func.get_bind_data::<SASBindData>();
 
-        unsafe {
-            if (*init_info).done {
-                output.set_len(0);
-            } else {
-                (*init_info).done = true;
-                let vector = output.flat_vector(0);
-                let name = CString::from_raw((*bind_info).name);
-                let result = CString::new(format!("Rusty Quack {} 🐥", name.to_str()?))?;
-                // Can't consume the CString
-                (*bind_info).name = CString::into_raw(name);
-                vector.insert(0, result);
-                output.set_len(1);
-            }
+        if (*init_data).done {
+            output.set_len(0);
+        } else {
+            (*init_data).done = true;
+            let file_path = CStr::from_ptr((*bind_data).file_path).to_string_lossy();
+            
+            // Simule la lecture des données avec readstat
+            let result = format!("Lecture du fichier SAS : {}", file_path);
+            let vector = output.flat_vector(0);
+            vector.insert(0, CString::new(result)?.into_raw());
+            output.set_len(1);
         }
         Ok(())
     }
@@ -87,9 +81,8 @@ impl VTab for HelloVTab {
 
 const EXTENSION_NAME: &str = env!("CARGO_PKG_NAME");
 
-#[duckdb_entrypoint_c_api(ext_name = "rusty_quack", min_duckdb_version = "v0.0.1")]
+#[duckdb_entrypoint_c_api(ext_name = "readstat_duckdb", min_duckdb_version = "v0.0.1")]
 pub unsafe fn extension_entrypoint(con: Connection) -> Result<(), Box<dyn Error>> {
-    con.register_table_function::<HelloVTab>(EXTENSION_NAME)
-        .expect("Failed to register hello table function");
+    con.register_table_function::<SASVTab>(EXTENSION_NAME)?;
     Ok(())
 }

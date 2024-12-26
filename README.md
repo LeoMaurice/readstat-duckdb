@@ -1,13 +1,5 @@
 # DuckDB Rust extension template
-This is an **experimental** template for Rust based extensions based on the C Extension API of DuckDB. The goal is to 
-turn this eventually into a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions
-repository
-
-Features:
-- No DuckDB build required
-- No C++ or C code required
-- CI/CD chain preconfigured
-- (Coming soon) Works with community extensions
+This is an **experimental**  DuckDB extension allows reading SAS (`.sas7bdat`) files directly into DuckDB using the `readstat` library.
 
 ## Cloning
 
@@ -25,6 +17,9 @@ tooling to make life a little easier and to be able to share CI/CD infrastructur
 - Python3-venv
 - [Make](https://www.gnu.org/software/make)
 - Git
+- DuckDB >= v0.0.1
+- Rust >= 1.65
+- libreadstat (C library)
 
 Installing these dependencies will vary per platform:
 - For Linux, these come generally pre-installed or are available through the distro-specific package manager.
