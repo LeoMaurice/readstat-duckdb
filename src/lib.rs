@@ -1,6 +1,7 @@
 extern crate duckdb;
 extern crate duckdb_loadable_macros;
 extern crate libduckdb_sys;
+use libduckdb_sys as ffi;
 extern crate libc;
 
 use duckdb::{
@@ -9,7 +10,7 @@ use duckdb::{
     Connection, Result,
 };
 use duckdb_loadable_macros::duckdb_entrypoint_c_api;
-use libc::{c_char, c_void};
+use libc::c_char;
 use std::{
     error::Error,
     ffi::{CStr, CString},
@@ -64,11 +65,11 @@ impl VTab for SASVTab {
         } else {
             (*init_data).done = true;
             let file_path = CStr::from_ptr((*bind_data).file_path).to_string_lossy();
-            
-            // Simule la lecture des données avec readstat
+
+            // Simule la lecture des donn�es avec readstat
             let result = format!("Lecture du fichier SAS : {}", file_path);
             let vector = output.flat_vector(0);
-            vector.insert(0, CString::new(result)?.into_raw());
+            vector.insert(0, result.as_str()); // Ins�rer une r�f�rence de cha�ne
             output.set_len(1);
         }
         Ok(())
